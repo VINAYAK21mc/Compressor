@@ -3,7 +3,7 @@ import { VideoFormats, VideoInputSettings } from "./types";
 
 export const whatsappStatusCompressionCommand = (
   input: string,
-  output: string
+  output: string,
 ) => [
   "-i",
   input,
@@ -59,52 +59,64 @@ export const twitterCompressionCommand = (input: string, output: string) => [
 export const customVideoCompressionCommand = (
   input: string,
   output: string,
-  videoSettings: VideoInputSettings
+  videoSettings: VideoInputSettings,
 ): string[] => {
-  const inputType = getFileExtension(input);
+  const inputType = getFileExtension(input).toLowerCase();
+
   if (inputType === "mp4") {
+    console.log("mp4-intake");
     return getMP4toMP4Command(input, output, videoSettings);
-  } else {
-    switch (videoSettings.format) {
-      case VideoFormats.MP4:
-        return getMP4Command(input, output, videoSettings);
-      case VideoFormats.MKV:
-        return getMKVCommand(input, output, videoSettings);
-      case VideoFormats.MOV:
-        return getMOVCommand(input, output, videoSettings);
-      default:
-        return ["-i", input, output];
-    }
+  }
+
+  const format = videoSettings.format || VideoFormats.MP4;
+
+  switch (format) {
+    case VideoFormats.MP4:
+      return getMP4Command(input, output, videoSettings);
+    case VideoFormats.MKV:
+      return getMKVCommand(input, output, videoSettings);
+    case VideoFormats.MOV:
+      return getMOVCommand(input, output, videoSettings);
+    default:
+      // fallback: re-encode as mp4
+      return getMP4Command(input, output, videoSettings);
   }
 };
 
 const getMP4toMP4Command = (
   input: string,
   output: string,
-  videoSettings: VideoInputSettings
+  videoSettings: VideoInputSettings,
 ) => {
+  console.log("mp4-mp4");
   const ffmpegCommand = [
     "-i",
     input,
     "-c:v",
     "libx264",
     "-crf",
-    "23",
+    "50",
     "-preset",
     "medium",
     "-c:a",
     "aac",
     "-b:a",
     "128k",
-    output,
   ];
+
+  if (videoSettings.customStartTime)
+    ffmpegCommand.unshift("-ss", videoSettings.customStartTime.toString());
+  if (videoSettings.customEndTime)
+    ffmpegCommand.push("-to", videoSettings.customEndTime.toString());
+
+  ffmpegCommand.push(output);
   return ffmpegCommand;
 };
 
 const getMP4Command = (
   input: string,
   output: string,
-  videoSettings: VideoInputSettings
+  videoSettings: VideoInputSettings,
 ) => {
   const ffmpegCommand = [
     "-i",
@@ -154,7 +166,7 @@ const getMP4Command = (
 const getMOVCommand = (
   input: string,
   output: string,
-  videoSettings: VideoInputSettings
+  videoSettings: VideoInputSettings,
 ) => {
   const audioOptions = videoSettings.removeAudio ? [] : ["-c:a", "aac"];
   const ffmpegCommand = [
@@ -176,14 +188,13 @@ const getMOVCommand = (
 const getMKVCommand = (
   input: string,
   output: string,
-  videoSettings: VideoInputSettings
+  videoSettings: VideoInputSettings,
 ) => {
   const audioOptions = videoSettings.removeAudio ? [] : ["-c:a", "aac"];
   const ffmpegCommand = [
     "-i",
     input,
     "-c:v",
-    "libx264",
     "-crf",
     videoSettings.quality,
     ...audioOptions,
